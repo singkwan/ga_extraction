@@ -4,10 +4,6 @@
 
 import httplib2
 import sys
-#sys.path.append('C:\Users\Lazada\Google Drive\Analytics team\SK playground\modules\ga_unsampled_report')
-
-#reload(sys)
-#sys.setdefaultencoding('utf-8')
 from datetime import date
 from datetime import timedelta
 from datetime import datetime
@@ -28,11 +24,6 @@ import logging
 from copy import deepcopy
 
 class ga_extractor(object):
-
-    """ initialize the class. requires:
-    1. Config file that has the API key to access the GA accounts
-    2. id_mapping file that maps all the accounts to its respective table ids and country
-    3. Source path """
 
     
     def __init__(self,config_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\config.txt",id_mapping_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\id_mapping.csv"):
@@ -57,7 +48,7 @@ class ga_extractor(object):
         self.path_name=self.config_data['path_name']
         self.client_id=self.config_data['client_id']
         self.client_secret=self.config_data['client_secret']
-        
+       
         # Setup the logger to log the issues
         self.logger = logging.getLogger(self.config_file.split('.')[0]+"_logger")
         self.logger.setLevel(logging.INFO)
@@ -122,17 +113,13 @@ class ga_extractor(object):
         for itr_1 in itertools.chain(self.dimensions_list,self.metrics_list):
             self.columns_list.append(itr_1)
         
-        #usual_num_entries={'ID_DT':260,'MY_DT':260,'VN_DT':290,'SG_DT':260,'TH_DT':260,'PH_DT':270,
-        #                           'ID_iOS':48,'MY_iOS':48,'VN_iOS':48,'SG_iOS':48,'TH_iOS':48,'PH_iOS':48,
-        #                           'ID_Android':90,'MY_Android':90,'VN_Android':90,'SG_Android':90,'TH_Android':90,'PH_Android':90}
-
         self.logger.info('The start date of report is set to '+self.start_date_iso)        
         self.logger.info('The end date of report is set to '+self.end_date_iso)
 
         
-        id_row=self.df_id_mapping[self.df_id_mapping['table_id']==self.table_id]
-        self.account_id=id_row['account_id']
-        self.property_id=id_row['property_id']
+        id_row=self.df_id_mapping[self.df_id_mapping['table_id']=='ga:'+self.table_id]
+        self.account_id=id_row['account_id'].values[0]
+        self.property_id=id_row['property_id'].values[0]
         
         try:
 
@@ -162,8 +149,18 @@ class ga_extractor(object):
             print ('There was an API error : %s : %s' %
                 (error.resp.status, error.resp.reason)) 
         
-        return self.reports
-        
+        #return self.reports
+    
+   
+        try:
+            #Save report ids for retrieval
+            self.report_dict={'ids':self.reports['id'],'name':self.reports['title'],
+              'property_id':self.reports['webPropertyId'],'account_id':self.reports['accountId'],'table_id':self.reports['profileId']}
+            self.df_report_id=pd.DataFrame(data=self.report_dict,index=[0])
+            return self.df_report_id
+        except:
+            return "Error in API call"
+
     def get_unsampled(self,account_id,property_id,profile_id,report_id):
 
         try:
@@ -204,10 +201,6 @@ class ga_extractor(object):
         for itr_1 in itertools.chain(self.dimensions_list,self.metrics_list):
             self.columns_list.append(itr_1)
         
-        #usual_num_entries={'ID_DT':260,'MY_DT':260,'VN_DT':290,'SG_DT':260,'TH_DT':260,'PH_DT':270,
-        #                           'ID_iOS':48,'MY_iOS':48,'VN_iOS':48,'SG_iOS':48,'TH_iOS':48,'PH_iOS':48,
-        #                           'ID_Android':90,'MY_Android':90,'VN_Android':90,'SG_Android':90,'TH_Android':90,'PH_Android':90}
-
         self.logger.info('The start date of data pulled is '+self.start_date_iso)        
         self.logger.info('The end date of data pulled is '+self.end_date_iso)
        
