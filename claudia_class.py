@@ -161,14 +161,53 @@ class ga_extractor(object):
         except:
             return "Error in API call"
 
-    def get_unsampled(self,account_id,property_id,profile_id,report_id):
+
+    def gdrive_login(self):
+
+        # Authenticate and get a service object
+        attempt_1=0
+        while attempt_1 < 4:
+            try:
+            
+                # Send in client secret and client ID to the authetication server. Need to set this up in google developer console to get the client secrets and ID
+                # Then need to also activate google analytics in the allowed applications
+                flow = OAuth2WebServerFlow(
+                    self.client_id,
+                    self.client_secret,
+                    'https://www.googleapis.com/auth/drive')
+                
+                # Stores the credentials in credentials.dat (i think)
+                storage = Storage('credentials_gdrive.dat')
+                credentials = storage.get()
+                if credentials is None or credentials.invalid:
+                    credentials = run(flow, storage)
+                
+                # Use the credentials to get authentication?
+                # Finally if this is the first time, your browser should pop to ask for login and permission allowing app
+                http = httplib2.Http()
+                http = credentials.authorize(http)
+                self.service_gd = build('drive', 'v2', http=http)
+                attempt_1=100
+    
+            except Exception as e_connection:
+                attempt_1+=1            
+                self.logger.info('Exception is: '+str(e_connection))
+                self.logger.info('Attempt number '+str(attempt_1))     
+                time.sleep(7)
+                pass
+        
+        #Log success in logging in and put start and end dates in
+
+
+
+    def get_unsampled(self,sr_gd_dl):
 
         try:
             self.unsampled_report = self.service.management().unsampledReports().get(
-              accountId=account_id,
-              webPropertyId=property_id,
-              profileId=profile_id,
-              unsampledReportId=report_id
+              accountId=sr_gd_dl['account_id'],
+              webPropertyId=sr_gd_dl['property_id'],
+              profileId=sr_gd_dl['table_id'],
+              unsampledReportId=sr_gd_dl['ids']
               ).execute()
         
         except TypeError, error:
@@ -180,9 +219,57 @@ class ga_extractor(object):
             print ('There was an API error : %s : %s' %
                  (error.resp.status, error.resp.reason))
                  
-        return self.unsampled_report
+        return self.unsampled_report['status']
 
+
+        #self.logger.info('Gdrive authentication successful')
+
+
+    def get_details(self):
+        self.file_id=self.unsampled_report['driveDownloadDetails']['documentId']
+        try:
+            self.details_gd = self.service_gd.files().get(fileId=self.file_id).execute()
+            return self.details_gd
+            
+        except HttpError, error:
+            print 'An error occurred: %s' % error
         
+        
+        
+    def download_file(self):
+
+        download_url = self.details_gd.get('downloadUrl')
+        if download_url:
+            self.resp, self.content = self.service_gd._http.request(download_url)
+            if self.resp.status == 200:
+                print('done for '+download_url)
+                return self.content
+            else:
+                print 'An error occurred: %s' % self.resp
+                return None
+        else:
+          # The file doesn't have any content stored on Drive.
+          return None
+          
+    def download_gdocs_xlsx(self,output_filename='output.xlsx'):
+        download_url = self.details_gd['exportLinks']['application/ vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+
+        if download_url:
+            self.resp, self.content = self.service_gd._http.request(download_url)
+            if self.resp.status == 200:
+                print('done for '+download_url)
+                a=open(output_filename,'wb')
+                a.write(self.content)
+                a.close()
+                return 1
+            else:
+                print 'An error occurred: %s' % self.resp
+                return 0
+        else:
+          # The file doesn't have any content stored on Drive.
+          return None
+
+
     def get_data_df(self,dimensions,metrics,table_id_list,start_date_iso,end_date_iso,filters='ga:source=~.*',segment='gaid::-1'):
         
         self.dimensions_list=dimensions.split(',')
