@@ -19,9 +19,10 @@ from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
 from apiclient.errors import HttpError
 import pandas as pd
-import shutil
+
 import logging
 from copy import deepcopy
+import os
 
 class ga_extractor(object):
 
@@ -235,15 +236,20 @@ class ga_extractor(object):
             print 'An error occurred: %s' % error
         
         
-        
-    def download_file(self):
+    def download_file(self,file_name):
 
         download_url = self.details_gd.get('downloadUrl')
         if download_url:
             self.resp, self.content = self.service_gd._http.request(download_url)
             if self.resp.status == 200:
-                print('done for '+download_url)
-                return self.content
+                try:
+                    print('done for '+download_url)
+                    rr=open(os.path.join(self.path_name,file_name),'wb')
+                    rr.write(self.content)
+                    rr.close()                
+                    return "File written"
+                except:
+                    return "Fail in writing file"
             else:
                 print 'An error occurred: %s' % self.resp
                 return None
@@ -268,6 +274,64 @@ class ga_extractor(object):
         else:
           # The file doesn't have any content stored on Drive.
           return None
+
+    def get_data(self,table_id):
+        
+        self.table_id=table_id
+         
+        # Maps the table_id to the country OR device
+        country_mapping={'ga:57882851':'MY','ga:57748423':'PH','ga:57130184':'ID','ga:83574663':'SG','ga:57661230':'VN','ga:57754019':'TH',
+                           'ga:76788987':'MY','ga:76793115':'PH','ga:76792911':'ID','ga:87173936':'SG','ga:76793015':'VN','ga:76792218':'TH',
+                         'ga:71134748':'MY','ga:71133279':'PH','ga:71140910':'ID','ga:87175539':'SG','ga:71132679':'VN','ga:71137422':'TH'  }
+        device_mapping={'ga:76788987':'iOS','ga:76793115':'iOS','ga:76792911':'iOS','ga:87173936':'iOS','ga:76793015':'iOS','ga:76792218':'iOS',
+                             'ga:71134748':'Android','ga:71133279':'Android','ga:71140910':'Android','ga:87175539':'Android','ga:71132679':'Android','ga:71137422':'Android'  }    
+        
+        # Set up the API query with the right data
+        api_query = self.service.data().ga().get(
+            ids=self.table_id,
+            start_date=self.start_date_iso,
+            end_date=self.end_date_iso,
+            metrics=self.metrics,
+            dimensions=self.dimensions,
+            start_index=1,
+            max_results='10000',
+            filters=self.filters,
+            segment=self.segment,
+            samplingLevel='HIGHER_PRECISION'
+
+        )
+        
+        # Execute query
+        self.result = api_query.execute()
+        sampled_check=self.result.get('containsSampledData')
+
+        
+        #Put data into a data frame          
+        self.df_1=pd.DataFrame(self.result.get('rows'),columns=self.columns_list)
+        
+        country=self.df_id_mapping[self.df_id_mapping['table_id']==self.table_id].loc[:,'Country'].iloc[0]
+        
+        device=self.df_id_mapping[self.df_id_mapping['table_id']==self.table_id].loc[:,'Platform'].iloc[0]
+        self.df_1['Country']=country
+        self.df_1['Sampling level']=sampled_check
+        
+        if device_mapping.get(table_id) == None:
+            self.df_1['Platform']='web'
+        else:
+            self.df_1['Platform']=device
+        
+        if self.segment <> 'gaid::-1':
+            self.df_1['Segment']=self.segment
+        else:
+            self.df_1['Segment']='All'
+            
+        if self.filters <> 'ga:source=~.*':
+            self.df_1['Filters']=self.filters
+        else:
+            self.df_1['Filters']='No filter' 
+        #output the number of entries to cross check if something is up with the data
+        no_of_entries_pulled=self.df_1.iloc[:,2].count()
+        return self.df_1,country,no_of_entries_pulled,sampled_check
 
 
     def get_data_df(self,dimensions,metrics,table_id_list,start_date_iso,end_date_iso,filters='ga:source=~.*',segment='gaid::-1'):
