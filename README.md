@@ -13,9 +13,9 @@
 - Additional function checks to see if the file processing is ready [get_unsampled()] 
 - Once it is ready you can just extract the data by running get_details() and then download_file() [set the filename] that uses the gdrive API!
 
-Key features!
-# Allows for unsampled report extraction workflow that utlizes both GA and gdrive APIs
-# Also allows for normal data extraction with API and lets you know if its sampled
-# Centralized config file that stores the credentials information (client secret and Key) in a central file
-# Accesses a mapping table that stores account, property and table id in a single file, so that all you need is to give a table ID and data can be extracted
-# Heavy use of pandas especially as outputs - data output is dataframes which makes it easy to export into CSV or process
+# Key features!
+-  Allows for unsampled report extraction workflow that utlizes both GA and gdrive APIs
+- Also allows for normal data extraction with API and lets you know if its sampled
+- Centralized config file that stores the credentials information (client secret and Key) in a central file
+- Accesses a mapping table that stores account, property and table id in a single file, so that all you need is to give a table ID and data can be extracted
+- Heavy use of pandas especially as outputs - data output is dataframes which makes it easy to export into CSV or process
