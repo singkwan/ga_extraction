@@ -27,14 +27,12 @@ import os
 class ga_extractor(object):
 
     
-    def __init__(self,config_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\config.txt",id_mapping_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\id_mapping.csv"):
-        
+    def __init__(self,config_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\config.txt",id_mapping_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\id_mapping.csv",map_master_file='map_master.xlsx'):       
         """ initialize the class. requires:
         1. Config file that has the API key to access the GA accounts
         2. id_mapping file that maps all the accounts to its respective table ids and country
         3. Source path """
-        
-        self.df_id_mapping=pd.read_csv(id_mapping_file)
+
         
         # Read in config data file and pass values        
         self.config_file=config_file        
@@ -49,6 +47,25 @@ class ga_extractor(object):
         self.path_name=self.config_data['path_name']
         self.client_id=self.config_data['client_id']
         self.client_secret=self.config_data['client_secret']
+
+
+        self.df_id_mapping=pd.read_csv(id_mapping_file)     
+        
+                        
+        self.df_map_ga=pd.read_excel(os.path.join(self.path_name,map_master_file),sheetname='Main')
+
+        self.df_map_ga=self.df_map_ga.reset_index(drop=True)
+        self.df_map_ga['map_fk']=self.df_map_ga.loc[:,'country']+'_'+self.df_map_ga.loc[:,'platform']
+        
+        self.df_map_ga=self.df_map_ga.merge(self.df_id_mapping,how='left',left_on='map_fk',right_on='name')
+        
+        self.df_map_ga=self.df_map_ga.drop(['Platform'],axis=1)
+#        self.df_map_ga=self.df_map_ga.rename(columns={'Platform_x':'Platform'})
+        
+        self.df_mm=self.df_map_ga.drop(['Country'],axis=1)
+#            self.df_mm=self.df_map_ga.rename(columns={'Country':'Country'})
+        
+
        
         # Setup the logger to log the issues
         self.logger = logging.getLogger(self.config_file.split('.')[0]+"_logger")
@@ -94,20 +111,29 @@ class ga_extractor(object):
         
         #Log success in logging in and put start and end dates in
         self.logger.info('Authentication successful')   
+    
+        
+    def insert_unsampled(self,df_rows,title,start_date_iso,end_date_iso):
+        """ initialize the class
+        Requires
+        --------
+        1. Config file that has the API key to access the GA accounts
+        2. id_mapping file that maps all the accounts to its respective table ids and country
+        3. Source path """
+        self.df_rows=df_rows
+        # Data from the series
+        self.dimensions_list=df_rows['dimensions'].split(',')
+        self.dimensions=df_rows['dimensions']
+        self.metrics_list=df_rows['metrics'].split(',')
+        self.metrics=df_rows['metrics']
+        self.table_id=self.df_mm[(self.df_mm['country']==df_rows['country']) & (self.df_mm['platform']==df_rows['platform'])]['table_id'].iloc[0][3:]
+        self.filters=df_rows['filter']
+        self.segment=df_rows['segment']
 
-        
-    def insert_unsampled(self,title,dimensions,metrics,table_id,start_date_iso,end_date_iso,filters='ga:source=~.*',segment='gaid::-1'):
-        
-        self.dimensions_list=dimensions.split(',')
-        self.metrics_list=metrics.split(',')
         self.title=title
-        self.start_date_iso=start_date_iso
-        self.dimensions=dimensions
-        self.metrics=metrics
-        self.filters=filters
-        self.table_id=table_id[3:]
+        self.start_date_iso=start_date_iso        
         self.end_date_iso=end_date_iso     
-        self.segment=segment
+
         self.reports=0
         
         self.columns_list=[]        
@@ -224,9 +250,9 @@ class ga_extractor(object):
 
 
         #self.logger.info('Gdrive authentication successful')
+        
+    def download_file(self,file_name):
 
-
-    def get_details(self):
         self.file_id=self.unsampled_report['driveDownloadDetails']['documentId']
         try:
             self.details_gd = self.service_gd.files().get(fileId=self.file_id).execute()
@@ -234,9 +260,7 @@ class ga_extractor(object):
             
         except HttpError, error:
             print 'An error occurred: %s' % error
-        
-        
-    def download_file(self,file_name):
+
 
         download_url = self.details_gd.get('downloadUrl')
         if download_url:
@@ -278,13 +302,6 @@ class ga_extractor(object):
     def get_data(self,table_id):
         
         self.table_id=table_id
-         
-        # Maps the table_id to the country OR device
-        country_mapping={'ga:57882851':'MY','ga:57748423':'PH','ga:57130184':'ID','ga:83574663':'SG','ga:57661230':'VN','ga:57754019':'TH',
-                           'ga:76788987':'MY','ga:76793115':'PH','ga:76792911':'ID','ga:87173936':'SG','ga:76793015':'VN','ga:76792218':'TH',
-                         'ga:71134748':'MY','ga:71133279':'PH','ga:71140910':'ID','ga:87175539':'SG','ga:71132679':'VN','ga:71137422':'TH'  }
-        device_mapping={'ga:76788987':'iOS','ga:76793115':'iOS','ga:76792911':'iOS','ga:87173936':'iOS','ga:76793015':'iOS','ga:76792218':'iOS',
-                             'ga:71134748':'Android','ga:71133279':'Android','ga:71140910':'Android','ga:87175539':'Android','ga:71132679':'Android','ga:71137422':'Android'  }    
         
         # Set up the API query with the right data
         api_query = self.service.data().ga().get(
@@ -315,7 +332,7 @@ class ga_extractor(object):
         self.df_1['Country']=country
         self.df_1['Sampling level']=sampled_check
         
-        if device_mapping.get(table_id) == None:
+        if device == None:
             self.df_1['Platform']='web'
         else:
             self.df_1['Platform']=device
@@ -334,19 +351,19 @@ class ga_extractor(object):
         return self.df_1,country,no_of_entries_pulled,sampled_check
 
 
-    def get_data_df(self,dimensions,metrics,table_id_list,start_date_iso,end_date_iso,filters='ga:source=~.*',segment='gaid::-1'):
+    def get_data_df(self,df_rows,start_date_iso,end_date_iso):
         
-        self.dimensions_list=dimensions.split(',')
-        self.metrics_list=metrics.split(',')
+        # Data from the series
+        self.dimensions_list=df_rows['dimensions'].split(',')
+        self.dimensions=df_rows['dimensions']
+        self.metrics_list=df_rows['metrics'].split(',')
+        self.metrics=df_rows['metrics']
+        self.table_id=self.df_mm[(self.df_mm['country']==df_rows['country']) & (self.df_mm['platform']==df_rows['platform'])]['table_id'].iloc[0][3:]
+        self.filters=df_rows['filter']
+        self.segment=df_rows['segment']
         
         self.start_date_iso=start_date_iso
-        self.dimensions=dimensions
-        self.metrics=metrics
-        self.filters=filters
-        self.table_id_list=table_id_list
         self.end_date_iso=end_date_iso     
-        self.segment=segment
-        
         
         self.columns_list=[]        
         for itr_1 in itertools.chain(self.dimensions_list,self.metrics_list):
@@ -357,37 +374,37 @@ class ga_extractor(object):
        
     
         header_count=0
-        for table_id in self.table_id_list:
-            attempt_2=0
-            #Add in a loop to try again if data source unavailable            
-            while attempt_2 < 4:
-                try:
-                    df_2,country,no_of_entries,self.sampled_check=self.get_data(table_id)
-                    #if device==None:
-                    #    device="DT"
-                    if header_count==0:
-                        #df_2.to_csv(path_name+"\\"+file_name,index=False,mode='a',header=True)
-                        self.df_out=deepcopy(df_2)
-                    else:
-                        #df_2.to_csv(path_name+"\\"+file_name,index=False,mode='a',header=False)
-                        self.df_out=self.df_out.append(df_2)
-                    self.logger.info('Done for '+country+' with number of entries: '+str(no_of_entries))
-                    if self.sampled_check==1:
-                        self.logger.info('Data is sampled!! WARNING')
-                    else:
-                        self.logger.info('Data is unsampled')
-                    #if no_of_entries > 1.15*usual_num_entries[country+"_"+device] or no_of_entries < 0.85*usual_num_entries[country+"_"+device]:
-                    #    logger.error('Number of values pulled '+str(no_of_entries)+' deviates more than 15% from the usual rows pulled which is set as '+str(usual_num_entries[country+"_"+device]))
-                    attempt_2=100
-                                    
-                except Exception, GA_extraction_error:
-                    self.logger.info(GA_extraction_error)
-                    attempt_2+=1
-                    self.logger.error('24hr Attempt number '+str(attempt_2))
-                    time.sleep(7)
-                    pass
-                 
-            header_count+=1       
+        
+        attempt_2=0
+        #Add in a loop to try again if data source unavailable            
+        while attempt_2 < 4:
+            try:
+                df_2,country,no_of_entries,self.sampled_check=self.get_data(self.table_id)
+                #if device==None:
+                #    device="DT"
+                if header_count==0:
+                    #df_2.to_csv(path_name+"\\"+file_name,index=False,mode='a',header=True)
+                    self.df_out=deepcopy(df_2)
+                else:
+                    #df_2.to_csv(path_name+"\\"+file_name,index=False,mode='a',header=False)
+                    self.df_out=self.df_out.append(df_2)
+                self.logger.info('Done for '+country+' with number of entries: '+str(no_of_entries))
+                if self.sampled_check==1:
+                    self.logger.info('Data is sampled!! WARNING')
+                else:
+                    self.logger.info('Data is unsampled')
+                #if no_of_entries > 1.15*usual_num_entries[country+"_"+device] or no_of_entries < 0.85*usual_num_entries[country+"_"+device]:
+                #    logger.error('Number of values pulled '+str(no_of_entries)+' deviates more than 15% from the usual rows pulled which is set as '+str(usual_num_entries[country+"_"+device]))
+                attempt_2=100
+                                
+            except Exception, GA_extraction_error:
+                self.logger.info(GA_extraction_error)
+                attempt_2+=1
+                self.logger.error('24hr Attempt number '+str(attempt_2))
+                time.sleep(7)
+                pass
+             
+        
         
         return self.df_out
     
