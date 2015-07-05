@@ -113,13 +113,14 @@ class ga_extractor(object):
         self.logger.info('Authentication successful')   
     
         
-    def insert_unsampled(self,df_rows,title,start_date_iso,end_date_iso):
+    def insert_unsampled(self,df_rows,title,start_date_iso,end_date_iso,file_tracker='file_tracker.csv'):
         """ initialize the class
         Requires
         --------
         1. Config file that has the API key to access the GA accounts
         2. id_mapping file that maps all the accounts to its respective table ids and country
         3. Source path """
+        self.file_tracker=file_tracker
         self.df_rows=df_rows
         # Data from the series
         self.dimensions_list=df_rows['dimensions'].split(',')
@@ -184,7 +185,16 @@ class ga_extractor(object):
             self.report_dict={'ids':self.reports['id'],'name':self.reports['title'],
               'property_id':self.reports['webPropertyId'],'account_id':self.reports['accountId'],'table_id':self.reports['profileId']}
             self.df_report_id=pd.DataFrame(data=self.report_dict,index=[0])
+            try:            
+                a=pd.read_csv(os.path.join(self.path_name,self.file_tracker))
+                a=a.append(self.df_report_id)
+                a.to_csv(os.path.join(self.path_name,self.file_tracker),mode='w',index=0)
+            except:    
+                self.df_report_id.to_csv(os.path.join(self.path_name,self.file_tracker),mode='w',index=0)
+
             return self.df_report_id
+
+
         except:
             return "Error in API call"
 
@@ -227,59 +237,77 @@ class ga_extractor(object):
 
 
 
-    def get_unsampled(self,sr_gd_dl):
-
-        try:
-            self.unsampled_report = self.service.management().unsampledReports().get(
-              accountId=sr_gd_dl['account_id'],
-              webPropertyId=sr_gd_dl['property_id'],
-              profileId=sr_gd_dl['table_id'],
-              unsampledReportId=sr_gd_dl['ids']
-              ).execute()
+    def get_unsampled(self):
+                
+        self.df_unsampled=pd.read_csv(os.path.join(self.path_name,self.file_tracker))
         
-        except TypeError, error:
-            # Handle errors in constructing a query.
-            print 'There was an error in constructing your query : %s' % error
+        c=pd.DataFrame()
+        for index_2, sr_gd_dl in self.df_unsampled.iterrows():
+                   
+            try:
+                self.unsampled_report = self.service.management().unsampledReports().get(
+                  accountId=sr_gd_dl['account_id'],
+                  webPropertyId=sr_gd_dl['property_id'],
+                  profileId=sr_gd_dl['table_id'],
+                  unsampledReportId=sr_gd_dl['ids']
+                  ).execute()
+                  
+                if self.unsampled_report['status']=='COMPLETED':
+                     sr_gd_dl['status']='completed'
+                     sr_gd_dl['file_id']=self.unsampled_report['driveDownloadDetails']['documentId']
+                elif self.unsampled_report['status']=='PENDING':
+                     sr_gd_dl['status']='pending'
+                     sr_gd_dl['file_id']='pending'
+                
+                c=pd.concat([c,sr_gd_dl],axis=1)
+                                     
+                  
+            except TypeError, error:
+                # Handle errors in constructing a query.
+                print 'There was an error in constructing your query : %s' % error
+            
+            except HttpError, error:
+                # Handle API errors.
+                print ('There was an API error : %s : %s' %
+                     (error.resp.status, error.resp.reason))
+
+        c=c.transpose()
+        c.to_csv(os.path.join(self.path_name,self.file_tracker),index=0,mode='w')
         
-        except HttpError, error:
-            # Handle API errors.
-            print ('There was an API error : %s : %s' %
-                 (error.resp.status, error.resp.reason))
-                 
-        return self.unsampled_report['status']
-
-
         #self.logger.info('Gdrive authentication successful')
         
-    def download_file(self,file_name):
+    def download_files(self):
 
-        self.file_id=self.unsampled_report['driveDownloadDetails']['documentId']
-        try:
-            self.details_gd = self.service_gd.files().get(fileId=self.file_id).execute()
-            return self.details_gd
-            
-        except HttpError, error:
-            print 'An error occurred: %s' % error
-
-
-        download_url = self.details_gd.get('downloadUrl')
-        if download_url:
-            self.resp, self.content = self.service_gd._http.request(download_url)
-            if self.resp.status == 200:
-                try:
-                    print('done for '+download_url)
-                    rr=open(os.path.join(self.path_name,file_name),'wb')
-                    rr.write(self.content)
-                    rr.close()                
-                    return "File written"
-                except:
-                    return "Fail in writing file"
+        self.df_unsampled=pd.read_csv(os.path.join(self.path_name,self.file_tracker))
+        
+        for index, rows in self.df_unsampled.iterrows():
+            self.file_id=rows['file_id']
+            try:
+                self.details_gd = self.service_gd.files().get(fileId=self.file_id).execute()
+                
+            except HttpError, error:
+                print 'An error occurred: %s' % error
+    
+    
+            self.download_url = self.details_gd['downloadUrl']
+            if self.download_url:
+                
+                self.resp, self.content = self.service_gd._http.request(self.download_url)
+                if self.resp.status == 200:
+                    try:
+                        print('done for '+self.download_url)
+                        rr=open(os.path.join(self.path_name,self.df_unsampled['file_id'][0]+'.csv'),'wb')
+                        rr.write(self.content)
+                        rr.close()                
+                        
+                    except:
+                        return "Fail in writing file"
+                else:
+                    print 'An error occurred: %s' % self.resp
+                    return None
             else:
-                print 'An error occurred: %s' % self.resp
-                return None
-        else:
-          # The file doesn't have any content stored on Drive.
-          return None
+              # The file doesn't have any content stored on Drive.
+              return None
           
     def download_gdocs_xlsx(self,output_filename='output.xlsx'):
         download_url = self.details_gd['exportLinks']['application/ vnd.openxmlformats-officedocument.spreadsheetml.sheet']
@@ -407,22 +435,4 @@ class ga_extractor(object):
         
         
         return self.df_out
-    
-#Run if main
-if __name__=='__main__':
-    
-    # Set variables
-    file_name="avg_basket.csv"
-    start_date_iso='2015-01-01'
-    end_date_iso='2015-01-03'
-    
-    # Set GA dimensions and metrics for the report to pull
-    dimensions = 'ga:day,ga:channelGrouping,ga:sourceMedium'
-    metrics = 'ga:revenuePerTransaction'    
-    #filters='ga:channelGrouping==CPC Media'
-
-
-    table_id_list=['ga:57882851','ga:71134748']
-                   
-    #main(file_name,dimensions,metrics,filters,table_id_list,start_date_iso,end_date_iso)
     
