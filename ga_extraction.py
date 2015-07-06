@@ -241,7 +241,7 @@ class ga_extractor(object):
                 
         self.df_unsampled=pd.read_csv(os.path.join(self.path_name,self.file_tracker))
         
-        c=pd.DataFrame()
+        self.df_check=pd.DataFrame()
         for index_2, sr_gd_dl in self.df_unsampled.iterrows():
                    
             try:
@@ -259,7 +259,7 @@ class ga_extractor(object):
                      sr_gd_dl['status']='pending'
                      sr_gd_dl['file_id']='pending'
                 
-                c=pd.concat([c,sr_gd_dl],axis=1)
+                self.df_check=pd.concat([self.df_check,sr_gd_dl],axis=1)
                                      
                   
             except TypeError, error:
@@ -271,13 +271,16 @@ class ga_extractor(object):
                 print ('There was an API error : %s : %s' %
                      (error.resp.status, error.resp.reason))
 
-        c=c.transpose()
-        c.to_csv(os.path.join(self.path_name,self.file_tracker),index=0,mode='w')
+        self.df_check=self.df_check.transpose()
+        self.df_check.to_csv(os.path.join(self.path_name,self.file_tracker),index=0,mode='w')
         
         #self.logger.info('Gdrive authentication successful')
         
-    def download_files(self):
-
+    def download_files(self,output_path=0):
+        if output_path==0:
+            self.output_path=self.path_name
+        else:
+            self.output_path=output_path
         self.df_unsampled=pd.read_csv(os.path.join(self.path_name,self.file_tracker))
         
         for index, rows in self.df_unsampled.iterrows():
@@ -296,7 +299,7 @@ class ga_extractor(object):
                 if self.resp.status == 200:
                     try:
                         print('done for '+self.download_url)
-                        rr=open(os.path.join(self.path_name,self.df_unsampled['file_id'][0]+'.csv'),'wb')
+                        rr=open(os.path.join(self.output_path,self.df_unsampled['file_id'][0]+'.csv'),'wb')
                         rr.write(self.content)
                         rr.close()                
                         
