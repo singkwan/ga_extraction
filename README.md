@@ -7,7 +7,7 @@
 
 #Example usage
 
-```
+```python
 @author: singkwan
 """
 import pandas as pd
