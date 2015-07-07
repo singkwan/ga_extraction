@@ -27,12 +27,14 @@ import os
 class ga_extractor(object):
 
     
-    def __init__(self,config_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\config.txt",id_mapping_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\id_mapping.csv",map_master_file='map_master.xlsx'):       
+    def __init__(self,config_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\config.txt",id_mapping_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\id_mapping.csv",map_master_file='map_master.xlsx',file_tracker='file_tracker.csv'):       
         """ initialize the class. requires:
         1. Config file that has the API key to access the GA accounts
         2. id_mapping file that maps all the accounts to its respective table ids and country
         3. Source path """
 
+        self.file_tracker=file_tracker
+                
         
         # Read in config data file and pass values        
         self.config_file=config_file        
@@ -105,7 +107,8 @@ class ga_extractor(object):
             except Exception as e_connection:
                 attempt_1+=1            
                 self.logger.info('Exception is: '+str(e_connection))
-                self.logger.info('Attempt number '+str(attempt_1))     
+                self.logger.info('Attempt number '+str(attempt_1))
+                print ('Exception is: '+str(e_connection)+'\n'+'Attempt number '+str(attempt_1))
                 time.sleep(7)
                 pass
         
@@ -113,14 +116,14 @@ class ga_extractor(object):
         self.logger.info('Authentication successful')   
     
         
-    def insert_unsampled(self,df_rows,title,start_date_iso,end_date_iso,file_tracker='file_tracker.csv'):
+    def insert_unsampled(self,df_rows,start_date_iso,end_date_iso):
         """ initialize the class
         Requires
         --------
         1. Config file that has the API key to access the GA accounts
         2. id_mapping file that maps all the accounts to its respective table ids and country
         3. Source path """
-        self.file_tracker=file_tracker
+
         self.df_rows=df_rows
         # Data from the series
         self.dimensions_list=df_rows['dimensions'].split(',')
@@ -131,7 +134,7 @@ class ga_extractor(object):
         self.filters=df_rows['filter']
         self.segment=df_rows['segment']
 
-        self.title=title
+        self.title=df_rows['country']+'_'+df_rows['platform']+'_'+df_rows['report_name']+'_'+start_date_iso+'__to__'+end_date_iso
         self.start_date_iso=start_date_iso        
         self.end_date_iso=end_date_iso     
 
@@ -191,12 +194,13 @@ class ga_extractor(object):
                 a.to_csv(os.path.join(self.path_name,self.file_tracker),mode='w',index=0)
             except:    
                 self.df_report_id.to_csv(os.path.join(self.path_name,self.file_tracker),mode='w',index=0)
-
+                print('Error saving ids report')
             return self.df_report_id
 
 
         except:
             return "Error in API call"
+            print('Error in API call')
 
 
     def gdrive_login(self):
@@ -232,6 +236,7 @@ class ga_extractor(object):
                 self.logger.info('Attempt number '+str(attempt_1))     
                 time.sleep(7)
                 pass
+                print ('Exception is: '+str(e_connection)+'\n'+'Attempt number '+str(attempt_1))
         
         #Log success in logging in and put start and end dates in
 
@@ -281,10 +286,13 @@ class ga_extractor(object):
             self.output_path=self.path_name
         else:
             self.output_path=output_path
+        
         self.df_unsampled=pd.read_csv(os.path.join(self.path_name,self.file_tracker))
         
         for index, rows in self.df_unsampled.iterrows():
             self.file_id=rows['file_id']
+            print('running at index '+str(index))
+          
             try:
                 self.details_gd = self.service_gd.files().get(fileId=self.file_id).execute()
                 
@@ -299,18 +307,20 @@ class ga_extractor(object):
                 if self.resp.status == 200:
                     try:
                         print('done for '+self.download_url)
-                        rr=open(os.path.join(self.output_path,self.df_unsampled['file_id'][0]+'.csv'),'wb')
+                        rr=open(os.path.join(self.output_path,rows['name']+'.csv'),'wb')
                         rr.write(self.content)
                         rr.close()                
                         
                     except:
+                        print('something wrong --- 1')                        
                         return "Fail in writing file"
                 else:
                     print 'An error occurred: %s' % self.resp
                     return None
             else:
               # The file doesn't have any content stored on Drive.
-              return None
+                print('something wrong')                
+                return None
           
     def download_gdocs_xlsx(self,output_filename='output.xlsx'):
         download_url = self.details_gd['exportLinks']['application/ vnd.openxmlformats-officedocument.spreadsheetml.sheet']
@@ -330,13 +340,11 @@ class ga_extractor(object):
           # The file doesn't have any content stored on Drive.
           return None
 
-    def get_data(self,table_id):
-        
-        self.table_id=table_id
+    def get_data(self):
         
         # Set up the API query with the right data
         api_query = self.service.data().ga().get(
-            ids=self.table_id,
+            ids=self.table_id_normal,
             start_date=self.start_date_iso,
             end_date=self.end_date_iso,
             metrics=self.metrics,
@@ -357,9 +365,9 @@ class ga_extractor(object):
         #Put data into a data frame          
         self.df_1=pd.DataFrame(self.result.get('rows'),columns=self.columns_list)
         
-        country=self.df_id_mapping[self.df_id_mapping['table_id']==self.table_id].loc[:,'Country'].iloc[0]
+        country=self.df_id_mapping[self.df_id_mapping['table_id']==self.table_id_normal].loc[:,'Country'].iloc[0]
         
-        device=self.df_id_mapping[self.df_id_mapping['table_id']==self.table_id].loc[:,'Platform'].iloc[0]
+        device=self.df_id_mapping[self.df_id_mapping['table_id']==self.table_id_normal].loc[:,'Platform'].iloc[0]
         self.df_1['Country']=country
         self.df_1['Sampling level']=sampled_check
         
@@ -389,7 +397,7 @@ class ga_extractor(object):
         self.dimensions=df_rows['dimensions']
         self.metrics_list=df_rows['metrics'].split(',')
         self.metrics=df_rows['metrics']
-        self.table_id=self.df_mm[(self.df_mm['country']==df_rows['country']) & (self.df_mm['platform']==df_rows['platform'])]['table_id'].iloc[0][3:]
+        self.table_id_normal=self.df_mm[(self.df_mm['country']==df_rows['country']) & (self.df_mm['platform']==df_rows['platform'])]['table_id'].iloc[0]
         self.filters=df_rows['filter']
         self.segment=df_rows['segment']
         
@@ -410,7 +418,7 @@ class ga_extractor(object):
         #Add in a loop to try again if data source unavailable            
         while attempt_2 < 4:
             try:
-                df_2,country,no_of_entries,self.sampled_check=self.get_data(self.table_id)
+                df_2,country,no_of_entries,self.sampled_check=self.get_data()
                 #if device==None:
                 #    device="DT"
                 if header_count==0:
@@ -434,6 +442,7 @@ class ga_extractor(object):
                 self.logger.error('24hr Attempt number '+str(attempt_2))
                 time.sleep(7)
                 pass
+                print ('24hr Attempt number '+str(attempt_2))
              
         
         
