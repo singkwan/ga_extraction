@@ -8,8 +8,7 @@
 #Example usage
 
 ```python
-@author: singkwan
-"""
+
 import pandas as pd
 import sys
 sys.path.append('C:\Users\Lazada\Google Drive\Analytics team\SK playground\modules\ga_extraction')
