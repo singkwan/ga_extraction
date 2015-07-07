@@ -338,7 +338,8 @@ class ga_extractor(object):
                 return 0
         else:
           # The file doesn't have any content stored on Drive.
-          return None
+            print('No content in Drive')
+            return None
 
     def get_data(self):
         
