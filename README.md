@@ -65,9 +65,11 @@ location of file can be changed in the class (defaults set to where it is in my 
 
 #### config.txt
 - Config file that has the client id and secret
+```
 path_name; "C:\"
 client_id;460440-rklr162irdsfasfdsfsadfsadpq85cpc8hi3.apps.googleusercontent.com
 client_secret;J32IvM1WDwlDSFdasfJKJHDLHfb
+```
 - semicolon to separate key and values, with new line to separate the fields
 - location of file can be changed in the class (defaults set to where it is in my computer now)
 
