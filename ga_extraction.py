@@ -53,7 +53,8 @@ class ga_extractor(object):
 
         self.df_id_mapping=pd.read_csv(id_mapping_file)     
         
-                        
+        self.df_map_master=pd.read_excel(map_master_file, sheetname='Main') 
+               
         self.df_map_ga=pd.read_excel(os.path.join(self.path_name,map_master_file),sheetname='Main')
 
         self.df_map_ga=self.df_map_ga.reset_index(drop=True)
@@ -444,8 +445,33 @@ class ga_extractor(object):
                 time.sleep(7)
                 pass
                 print ('24hr Attempt number '+str(attempt_2))
-             
-        
         
         return self.df_out
     
+    def merge_output(self, start_date_iso):
+        path = "./data"
+        dirs = os.listdir(path)
+        files = []
+        df = pd.DataFrame()
+        
+        for i in dirs:
+            files.append("data/" + i)
+            
+        for fname in files:
+            print fname
+            data = pd.read_csv(fname, skiprows=7)
+            data["country"]=fname[5:7]
+            iindex = fname[12:].index("_") + 12
+            data["category"]=fname[12:iindex]           
+            df = df.append(data)
+
+        df["Currency"] = ""
+        df["Revenue (USD)"] = ""            
+        df["ga:date"] = pd.to_datetime(df["ga:date"], format="%Y%m%d")
+        df = df.rename(columns = {"ga:date":"Date Range", "ga:transactionId":"Transaction ID", "ga:transactions":"Transactions", "ga:channelGrouping":"Channel Grouping", "category":"Category Page", "country":"Country"})
+
+        df = df[["Date Range", "Channel Grouping", "Transaction ID", "Transactions", "Country", "Category Page", "Currency", "Revenue (USD)"]]
+
+        df.to_csv("GA daily extracts by transaction id/Daily_report_"+start_date_iso +".csv", index = False, date_format = "%d/%m/%Y")
+        
+        return df
