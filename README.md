@@ -50,6 +50,30 @@ elif unsampled==0:  # For normal core reporting API extraction
 
 ```
 
+### Other files required
+#### id_mapping.csv
+- This is a csv that stores the account, table and property details
+- It should look like this
+|name   | table_id    |Country | Platform  |  account_id | property_id |
+|ID_web | ga:57230784 |ID | web | 29401513  |  UA-29601043-1 |
+- Country and platform used as idenfiers and mapping columns to input file
+- location of file can be changed in the class (defaults set to where it is in my computer now)
+
+#### config.txt
+- Config file that has the client id and secret
+path_name; "C:\"
+client_id;460440-rklr162irdsfasfdsfsadfsadpq85cpc8hi3.apps.googleusercontent.com
+client_secret;J32IvM1WDwlDSFdasfJKJHDLHfb
+- semicolon to separate key and values, with new line to separate the fields
+- location of file can be changed in the class (defaults set to where it is in my computer now)
+
+#### map_master.csv
+- It should have the details of what you want to extract
+- Set country and platform that matches the id_mapping file
+|country |platform  |  report_name | segment | dimensions | metrics | filter |
+|MY  |web |All sessions | gaid::-1 | ga:date,ga:channelGrouping | ga:transactions | ga:source=~.* |
+
+
 # How it works in words
 ###ga_extraction
 - Extract data from google analytics both with normal API or by firing unsampled data request.
@@ -65,3 +89,4 @@ elif unsampled==0:  # For normal core reporting API extraction
 - Inserts an unsampled data request into GA and then it saves the names of the reports
 - Additional function checks to see if the file processing is ready [get_unsampled()] 
 - Once it is ready you can just extract the data by running get_details() and then download_file() [set the filename] that uses the gdrive API!
+
