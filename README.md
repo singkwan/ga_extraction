@@ -55,6 +55,7 @@ elif unsampled==0:  # For normal core reporting API extraction
 - This is a csv that stores the account, table and property details
 - It should look like this
 |name   | table_id    |Country | Platform  |  account_id | property_id |
+|------|------         |------  |------     |------       |------|
 |ID_web | ga:57230784 |ID | web | 29401513  |  UA-29601043-1 |
 - Country and platform used as idenfiers and mapping columns to input file
 - location of file can be changed in the class (defaults set to where it is in my computer now)
@@ -71,6 +72,7 @@ client_secret;J32IvM1WDwlDSFdasfJKJHDLHfb
 - It should have the details of what you want to extract
 - Set country and platform that matches the id_mapping file
 |country |platform  |  report_name | segment | dimensions | metrics | filter |
+|------   |------   |------   |------      |------   |------  |------  |
 |MY  |web |All sessions | gaid::-1 | ga:date,ga:channelGrouping | ga:transactions | ga:source=~.* |
 
 
