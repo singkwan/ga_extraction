@@ -1,5 +1,3 @@
-#!/bin/python
-#
 # GA extractor class
 
 import httplib2
@@ -342,7 +340,7 @@ class ga_extractor(object):
             print('No content in Drive')
             return None
 
-    def get_data(self):
+    def get_data(self,start_index=1):
         
         # Set up the API query with the right data
         api_query = self.service.data().ga().get(
@@ -351,7 +349,7 @@ class ga_extractor(object):
             end_date=self.end_date_iso,
             metrics=self.metrics,
             dimensions=self.dimensions,
-            start_index=1,
+            start_index=start_index,
             max_results='10000',
             filters=self.filters,
             segment=self.segment,
@@ -413,38 +411,38 @@ class ga_extractor(object):
         self.logger.info('The start date of data pulled is '+self.start_date_iso)        
         self.logger.info('The end date of data pulled is '+self.end_date_iso)
        
-    
-        header_count=0
-        
+        self.df_out=pd.DataFrame()
+        run_condition=1
         attempt_2=0
-        #Add in a loop to try again if data source unavailable            
-        while attempt_2 < 4:
-            try:
-                df_2,country,no_of_entries,self.sampled_check=self.get_data()
-                #if device==None:
-                #    device="DT"
-                if header_count==0:
-                    #df_2.to_csv(path_name+"\\"+file_name,index=False,mode='a',header=True)
-                    self.df_out=deepcopy(df_2)
-                else:
-                    #df_2.to_csv(path_name+"\\"+file_name,index=False,mode='a',header=False)
+        index_counter=1
+        #Add in a loop to try again if data source unavailable
+        while run_condition==1:            
+            while attempt_2 < 3:
+                try:
+                    df_2,country,no_of_entries,self.sampled_check=self.get_data(start_index=index_counter)
+    
                     self.df_out=self.df_out.append(df_2)
-                self.logger.info('Done for '+country+' with number of entries: '+str(no_of_entries))
-                if self.sampled_check==1:
-                    self.logger.info('Data is sampled!! WARNING')
-                else:
-                    self.logger.info('Data is unsampled')
-                #if no_of_entries > 1.15*usual_num_entries[country+"_"+device] or no_of_entries < 0.85*usual_num_entries[country+"_"+device]:
-                #    logger.error('Number of values pulled '+str(no_of_entries)+' deviates more than 15% from the usual rows pulled which is set as '+str(usual_num_entries[country+"_"+device]))
-                attempt_2=100
-                                
-            except Exception, GA_extraction_error:
-                self.logger.info(GA_extraction_error)
-                attempt_2+=1
-                self.logger.error('24hr Attempt number '+str(attempt_2))
-                time.sleep(7)
-                pass
-                print ('24hr Attempt number '+str(attempt_2))
+                    self.logger.info('Done for '+country+' with number of entries: '+str(no_of_entries))
+                    if self.sampled_check==1:
+                        self.logger.info('Data is sampled!! WARNING')
+                    else:
+                        self.logger.info('Data is unsampled')
+                    #if no_of_entries > 1.15*usual_num_entries[country+"_"+device] or no_of_entries < 0.85*usual_num_entries[country+"_"+device]:
+                    #    logger.error('Number of values pulled '+str(no_of_entries)+' deviates more than 15% from the usual rows pulled which is set as '+str(usual_num_entries[country+"_"+device]))
+                    
+                    if no_of_entries==10000:
+                        index_counter+=10000
+                    else:
+                        run_condition=0
+                        attempt_2=100
+                        
+                except Exception, GA_extraction_error:
+                    self.logger.info(GA_extraction_error)
+                    attempt_2+=1
+                    self.logger.error('24hr Attempt number '+str(attempt_2))
+                    time.sleep(7)
+                    pass
+                    print ('24hr Attempt number '+str(attempt_2))
         
         return self.df_out
     
