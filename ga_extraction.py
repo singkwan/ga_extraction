@@ -27,9 +27,10 @@ class ga_extractor(object):
     
     def __init__(self,config_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\config.txt",id_mapping_file="C:\Users\Lazada\Google Drive\Analytics team\SK playground\credentials\\id_mapping.csv",map_master_file='map_master.xlsx',file_tracker='file_tracker.csv'):       
         """ initialize the class. requires:
-        1. Config file that has the API key to access the GA accounts
-        2. id_mapping file that maps all the accounts to its respective table ids and country
-        3. Source path """
+        1. Config txt file that has the API key to access the GA accounts [config.txt]
+        2. id_mapping csv file that maps all the accounts to its respective table ids and country [id_mapping.csv]
+        3. Map master excel file that has the settings you want to extract [map_master.xlsx]
+        4. File tracker csv that it will write the output to check for gdrive download statuses - default is set to file_tracker.csv"""
 
         self.file_tracker=file_tracker
                 
@@ -116,12 +117,21 @@ class ga_extractor(object):
     
         
     def insert_unsampled(self,df_rows,start_date_iso,end_date_iso):
-        """ initialize the class
-        Requires
-        --------
-        1. Config file that has the API key to access the GA accounts
-        2. id_mapping file that maps all the accounts to its respective table ids and country
-        3. Source path """
+        """ Inserting the unsampled file into GA
+        
+        Parameters
+        ---------------------------------------
+        df_rows: This should be ideally rows from the map_master file. Pandas Series object with the following columns
+                dimensions = e.g. ga:channelGrouping
+                metrics = e.g. ga:sessions
+                country = Country of account [this can be replaced with another variable]. Takes a string
+                filter = filter to use. For default use ga:source=~.* which is no filter
+                segment = Either the segment ID, or segment using REGEX. For no segment use gaid::-1
+                platform = options are and,ios,web [specific to our use]
+                report_name = Name of report to use - string
+        start_date_iso: Format should be - '2015-07-04'
+        end_date_iso: Format should be '2015-07-04'
+        """
 
         self.df_rows=df_rows
         # Data from the series
@@ -203,7 +213,7 @@ class ga_extractor(object):
 
 
     def gdrive_login(self):
-
+        """ Logins to the gdrive using the your credentials - no input needed"""
         # Authenticate and get a service object
         attempt_1=0
         while attempt_1 < 4:
@@ -242,7 +252,14 @@ class ga_extractor(object):
 
 
     def get_unsampled(self):
-                
+        """ Gets the status and file_ids of unsampled reports- DOES NOT actually get the file yet,
+        its checking the status and returning the information required to download in from gdrive later
+
+        How it works
+        ---------------
+        It writes the status of each file into the file_tracker.csv(unless you changed the name of the file)
+        It writes the column status (done to show its done), as well as file_ids to use in the download_file function
+        """
         self.df_unsampled=pd.read_csv(os.path.join(self.path_name,self.file_tracker))
         
         self.df_check=pd.DataFrame()
@@ -281,6 +298,9 @@ class ga_extractor(object):
         #self.logger.info('Gdrive authentication successful')
         
     def download_files(self,output_path=0):
+        """Uses the file_tracker.csv information and downloads the files
+        Do not run this until all files in the set have status - done!"""
+        
         if output_path==0:
             self.output_path=self.path_name
         else:
@@ -391,6 +411,21 @@ class ga_extractor(object):
 
 
     def get_data_df(self,df_rows,start_date_iso,end_date_iso):
+        """ Get data using the core reporting API - this is the easiest way and ideal way to get this if dataset is not large/dimensions are not many so data is still unsampled
+        
+        Parameters
+        ---------------------------------------
+        df_rows: This should be ideally rows from the map_master file. Pandas Series object with the following columns
+                dimensions = e.g. ga:channelGrouping
+                metrics = e.g. ga:sessions
+                country = Country of account [this can be replaced with another variable]. Takes a string
+                filter = filter to use. For default use ga:source=~.* which is no filter
+                segment = Either the segment ID, or segment using REGEX. For no segment use gaid::-1
+                platform = options are and,ios,web [specific to our use]
+
+        start_date_iso: Format should be - '2015-07-04'
+        end_date_iso: Format should be '2015-07-04'
+        """
         
         # Data from the series
         self.dimensions_list=df_rows['dimensions'].split(',')
